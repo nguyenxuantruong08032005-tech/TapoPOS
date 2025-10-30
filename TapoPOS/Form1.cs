@@ -51,13 +51,23 @@ namespace TapoPOS
                     cmd.Parameters.AddWithValue("@TenDangNhap", txtTenDN.Text);
 
                     object result = cmd.ExecuteScalar();
+                    string storedHash = null;
 
-                    if (result == null)
+                    if (result is byte[] hashBytes)
+                    {
+                        storedHash = Convert.ToBase64String(hashBytes);
+                    }
+                    else if (result != null)
+                    {
+                        storedHash = result.ToString();
+                    }
+
+                    if (storedHash == null)
                     {
                         MessageBox.Show("Không có ID này!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         loginAttempts++;
                     }
-                    else if (!VerifyPassword(txtMatKhau.Text, result.ToString()))
+                    else if (!VerifyPassword(txtMatKhau.Text, storedHash))
                     {
                         MessageBox.Show("Sai mật khẩu!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         loginAttempts++;
