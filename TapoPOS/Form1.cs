@@ -8,7 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-
+using System.Security.Cryptography;
 namespace TapoPOS
 {
     public partial class Form1 : Form
@@ -57,7 +57,7 @@ namespace TapoPOS
                         MessageBox.Show("Không có ID này!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         loginAttempts++;
                     }
-                    else if (result.ToString() != txtMatKhau.Text)
+                    else if (!VerifyPassword(txtMatKhau.Text, result.ToString()))
                     {
                         MessageBox.Show("Sai mật khẩu!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         loginAttempts++;
@@ -105,6 +105,28 @@ namespace TapoPOS
         private void label2_Click(object sender, EventArgs e)
         {
 
+        }
+        private bool VerifyPassword(string password, string storedHash)
+        {
+            if (string.IsNullOrEmpty(password) || string.IsNullOrEmpty(storedHash))
+            {
+                return false;
+            }
+
+            using (SHA256 sha256Hash = SHA256.Create())
+            {
+                byte[] bytes = Encoding.UTF8.GetBytes(password);
+                byte[] hashBytes = sha256Hash.ComputeHash(bytes);
+
+                string hexHash = BitConverter.ToString(hashBytes).Replace("-", string.Empty);
+                if (string.Equals(storedHash, hexHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                string base64Hash = Convert.ToBase64String(hashBytes);
+                return string.Equals(storedHash, base64Hash, StringComparison.OrdinalIgnoreCase);
+            }
         }
     }
 }
