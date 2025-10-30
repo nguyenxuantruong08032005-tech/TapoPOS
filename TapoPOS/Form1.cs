@@ -51,16 +51,7 @@ namespace TapoPOS
                     cmd.Parameters.AddWithValue("@TenDangNhap", txtTenDN.Text);
 
                     object result = cmd.ExecuteScalar();
-                    string storedHash = null;
-
-                    if (result is byte[] hashBytes)
-                    {
-                        storedHash = Convert.ToBase64String(hashBytes);
-                    }
-                    else if (result != null)
-                    {
-                        storedHash = result.ToString();
-                    }
+                    byte[] storedHash = ParseStoredHash(result);
 
                     if (storedHash == null)
                     {
@@ -75,7 +66,7 @@ namespace TapoPOS
                     else
                     {
                         // Lấy loại nhân viên
-                        string loaiQuery = "SELECT TenDangNhap FROM [NguoiDung] WHERE TenDangNhap = @TenDangNhap";
+                        string loaiQuery = "SELECT VaiTro FROM [NguoiDung] WHERE TenDangNhap = @TenDangNhap";
                         SqlCommand loaiCmd = new SqlCommand(loaiQuery, conn);
                         loaiCmd.Parameters.AddWithValue("@TenDangNhap", txtTenDN.Text);
                         object loaiResult = loaiCmd.ExecuteScalar();
@@ -116,9 +107,77 @@ namespace TapoPOS
         {
 
         }
-        private bool VerifyPassword(string password, string storedHash)
+        private byte[] ParseStoredHash(object dbValue)
         {
-            if (string.IsNullOrEmpty(password) || string.IsNullOrEmpty(storedHash))
+            if (dbValue == null || dbValue is DBNull)
+            {
+                return null;
+            }
+
+            if (dbValue is byte[] bytes && bytes.Length > 0)
+            {
+                return bytes;
+            }
+
+            string stringValue = dbValue.ToString();
+            if (string.IsNullOrWhiteSpace(stringValue))
+            {
+                return null;
+            }
+
+            stringValue = stringValue.Trim();
+
+            if (stringValue.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                stringValue = stringValue.Substring(2);
+            }
+
+            if (IsHexString(stringValue))
+            {
+                int numberChars = stringValue.Length;
+                byte[] hexBytes = new byte[numberChars / 2];
+                for (int i = 0; i < numberChars; i += 2)
+                {
+                    hexBytes[i / 2] = Convert.ToByte(stringValue.Substring(i, 2), 16);
+                }
+                return hexBytes;
+            }
+
+            try
+            {
+                return Convert.FromBase64String(stringValue);
+            }
+            catch (FormatException)
+            {
+                return null;
+            }
+        }
+
+        private bool IsHexString(string value)
+        {
+            if (value.Length % 2 != 0)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                bool isHexDigit = (c >= '0' && c <= '9') ||
+                                  (c >= 'a' && c <= 'f') ||
+                                  (c >= 'A' && c <= 'F');
+                if (!isHexDigit)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool VerifyPassword(string password, byte[] storedHash)
+        {
+            if (string.IsNullOrEmpty(password) || storedHash == null || storedHash.Length == 0)
             {
                 return false;
             }
@@ -127,15 +186,19 @@ namespace TapoPOS
             {
                 byte[] bytes = Encoding.UTF8.GetBytes(password);
                 byte[] hashBytes = sha256Hash.ComputeHash(bytes);
-
-                string hexHash = BitConverter.ToString(hashBytes).Replace("-", string.Empty);
-                if (string.Equals(storedHash, hexHash, StringComparison.OrdinalIgnoreCase))
+                if (hashBytes.Length != storedHash.Length)
                 {
-                    return true;
+                    return false;
+                }
+                for (int i = 0; i < hashBytes.Length; i++)
+                {
+                    if (hashBytes[i] != storedHash[i])
+                    {
+                        return false;
+                    }
                 }
 
-                string base64Hash = Convert.ToBase64String(hashBytes);
-                return string.Equals(storedHash, base64Hash, StringComparison.OrdinalIgnoreCase);
+                return true;
             }
         }
     }
